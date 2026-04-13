@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generative Pattern Maker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+  .container { width: 100%; max-width: 600px; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 6px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+  canvas { border-radius: 12px; display: block; width: 100%; border: 0.5px solid #ddd; margin-bottom: 1.25rem; cursor: pointer; }
+  .style-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .style-btn { font-size: 12px; padding: 7px 16px; border-radius: 20px; border: 1px solid #ccc; background: #fff; color: #555; cursor: pointer; transition: all 0.15s; }
+  .style-btn:hover { background: #f0f0ee; }
+  .style-btn.active { border-color: #888; color: #1a1a1a; font-weight: 500; background: #fff; }
+  .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; margin-bottom: 1.5rem; }
+  .ctrl { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl label { font-size: 12px; color: #666; display: flex; justify-content: space-between; }
+  .ctrl label span { font-weight: 500; color: #1a1a1a; }
+  input[type=range] { width: 100%; accent-color: #555; }
+  .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .action-btn { font-size: 13px; padding: 9px 20px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #1a1a1a; cursor: pointer; transition: background 0.15s; }
+  .action-btn:hover { background: #f0f0ee; }
+  .footer { margin-top: 2rem; font-size: 12px; color: #aaa; text-align: center; }
+  .tip { font-size: 12px; color: #aaa; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Generative Pattern Maker</h1>
+  <p class="subtitle">Create animated geometric art with real-time controls. Save any frame as an image.</p>
+
+  <canvas id="gc" width="580" height="360"></canvas>
+  <p class="tip">Adjust sliders to reshape the pattern in real time.</p>
+
+  <div class="style-row" id="style-row">
+    <button class="style-btn active" onclick="setStyle('circles')">Circles</button>
+    <button class="style-btn" onclick="setStyle('grid')">Grid</button>
+    <button class="style-btn" onclick="setStyle('radial')">Radial</button>
+    <button class="style-btn" onclick="setStyle('waves')">Waves</button>
+  </div>
+
+  <div class="ctrl-grid">
+    <div class="ctrl">
+      <label>Density <span id="lbl-density">6</span></label>
+      <input type="range" min="3" max="12" step="1" value="6" id="sl-density">
+    </div>
+    <div class="ctrl">
+      <label>Speed <span id="lbl-speed">3</span></label>
+      <input type="range" min="1" max="8" step="1" value="3" id="sl-speed">
+    </div>
+    <div class="ctrl">
+      <label>Size <span id="lbl-size">5</span></label>
+      <input type="range" min="2" max="10" step="1" value="5" id="sl-size">
+    </div>
+    <div class="ctrl">
+      <label>Hue shift <span id="lbl-hue">0</span></label>
+      <input type="range" min="0" max="360" step="1" value="0" id="sl-hue">
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="action-btn" onclick="downloadCanvas()">Save image ↓</button>
+    <button class="action-btn" onclick="randomize()">Randomize ↻</button>
+    <button class="action-btn" id="pause-btn" onclick="togglePause()">Pause ⏸</button>
+  </div>
+
+  <div class="footer">Built with HTML5 Canvas API &nbsp;·&nbsp; Generative art using sine waves &amp; geometry</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gc');
+const ctx = canvas.getContext('2d');
+const W = 580, H = 360;
+let t = 0, raf, paused = false, styleMode = 'circles';
+let density = 6, speed = 3, size = 5, hueShift = 0;
+
+const palettes = [
+  [200,260,320,20],
+  [160,200,240,280],
+  [10,40,60,120],
+  [280,300,340,20],
+];
+let currentPal = palettes[0];
+
+function hsl(h, s, l, a=1) {
+  return `hsla(${(h + hueShift) % 360},${s}%,${l}%,${a})`;
+}
+
+function drawCircles() {
+  const cols = density, rows = Math.ceil(density * H / W);
+  const cx = W/cols, cy = H/rows;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = cx*(c+0.5), y = cy*(r+0.5);
+    const phase = (c+r)*0.4 + t;
+    const rad = (size*2.8)*(0.5+0.5*Math.sin(phase));
+    const h = currentPal[(c+r) % currentPal.length];
+    ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
+    ctx.fillStyle = hsl(h,70,60,0.85); ctx.fill();
+    ctx.beginPath(); ctx.arc(x,y,rad*0.45,0,Math.PI*2);
+    ctx.fillStyle = hsl(h+30,80,80,0.6); ctx.fill();
+  }
+}
+
+function drawGrid() {
+  const cols = density, rows = Math.ceil(density * H / W);
+  const cx = W/cols, cy = H/rows;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = cx*c+4, y = cy*r+4, w = cx-8, h2 = cy-8;
+    const phase = c*0.7 + r*0.5 + t;
+    const rot = Math.sin(phase) * Math.PI/4;
+    const h = currentPal[(c*2+r) % currentPal.length];
+    ctx.save();
+    ctx.translate(x+w/2, y+h2/2); ctx.rotate(rot);
+    ctx.fillStyle = hsl(h,65,60,0.8);
+    const s2 = size*2.5*(0.6+0.4*Math.abs(Math.sin(phase)));
+    ctx.fillRect(-s2/2,-s2/2,s2,s2);
+    ctx.strokeStyle = hsl(h+40,80,75,0.6);
+    ctx.lineWidth = 1.5; ctx.strokeRect(-s2/2,-s2/2,s2,s2);
+    ctx.restore();
+  }
+}
+
+function drawRadial() {
+  const cx = W/2, cy = H/2;
+  const spokes = density * 2;
+  for (let i = 0; i < spokes; i++) {
+    const angle = (Math.PI*2/spokes)*i + t*0.3;
+    for (let r = 1; r <= 7; r++) {
+      const dist = r*22 + size*2;
+      const x = cx + Math.cos(angle)*dist;
+      const y = cy + Math.sin(angle)*dist;
+      const h = currentPal[i % currentPal.length];
+      const pulse = 0.4 + 0.6*Math.abs(Math.sin(t + r*0.5 + i*0.3));
+      ctx.beginPath(); ctx.arc(x,y,size*(0.8+pulse*0.8),0,Math.PI*2);
+      ctx.fillStyle = hsl(h+r*10, 70, 55+r*3, 0.75*pulse); ctx.fill();
+    }
+  }
+}
+
+function drawWaves() {
+  const lines = density + 2;
+  for (let i = 0; i < lines; i++) {
+    const y = H/(lines+1)*(i+1);
+    const h = currentPal[i % currentPal.length];
+    ctx.beginPath(); ctx.moveTo(0, y);
+    for (let x = 0; x <= W; x += 4) {
+      const wave = Math.sin(x*0.025 + (t + i*0.5)) * size*4;
+      const wave2 = Math.sin(x*0.015 + (t*0.7 + i)) * size*2;
+      ctx.lineTo(x, y + wave + wave2);
+    }
+    ctx.strokeStyle = hsl(h, 70, 60, 0.75);
+    ctx.lineWidth = size*0.9+1; ctx.stroke();
+    ctx.strokeStyle = hsl(h+30, 85, 80, 0.35);
+    ctx.lineWidth = size*0.4; ctx.stroke();
+  }
+}
+
+function frame() {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0f0f14'; ctx.fillRect(0,0,W,H);
+  if (styleMode === 'circles') drawCircles();
+  else if (styleMode === 'grid') drawGrid();
+  else if (styleMode === 'radial') drawRadial();
+  else drawWaves();
+  if (!paused) t += speed * 0.012;
+  raf = requestAnimationFrame(frame);
+}
+frame();
+
+function setStyle(s) {
+  styleMode = s;
+  document.querySelectorAll('.style-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.toLowerCase() === s)
+  );
+}
+
+['density','speed','size','hue'].forEach(k => {
+  const sl = document.getElementById('sl-'+k);
+  const lbl = document.getElementById('lbl-'+k);
+  sl.oninput = () => {
+    lbl.textContent = sl.value;
+    if (k==='density') density = +sl.value;
+    else if (k==='speed') speed = +sl.value;
+    else if (k==='size') size = +sl.value;
+    else if (k==='hue') hueShift = +sl.value;
+  };
+});
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pause-btn').textContent = paused ? 'Resume ▶' : 'Pause ⏸';
+}
+
+function randomize() {
+  density = 3 + Math.floor(Math.random()*9);
+  speed   = 1 + Math.floor(Math.random()*7);
+  size    = 2 + Math.floor(Math.random()*8);
+  hueShift = Math.floor(Math.random()*360);
+  currentPal = palettes[Math.floor(Math.random()*palettes.length)];
+  const styles = ['circles','grid','radial','waves'];
+  setStyle(styles[Math.floor(Math.random()*4)]);
+  [['density',density],['speed',speed],['size',size],['hue',hueShift]].forEach(([k,v]) => {
+    document.getElementById('sl-'+k).value = v;
+    document.getElementById('lbl-'+k).textContent = v;
+  });
+}
+
+function downloadCanvas() {
+  const a = document.createElement('a');
+  a.download = 'generative-pattern.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>
